@@ -1,54 +1,108 @@
-<script>
-    const imagesInput = document.getElementById("images");
-    const output = document.getElementById("output");
-    const processBtn = document.getElementById("processBtn");
-    const downloadZipBtn = document.getElementById("downloadZipBtn");
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đổi tên ảnh theo chữ OCR</title>
 
-    processBtn.onclick = async () => {
-        const files = imagesInput.files;
-        if (!files.length) return alert("Hãy chọn ảnh!");
+    <!-- Tesseract.js -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2/dist/tesseract.min.js"></script>
 
-        output.innerHTML = "Đang xử lý OCR...<br>";
-        const zip = new JSZip();
+    <!-- JSZip và FileSaver -->
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
-        for (const file of files) {
-            output.innerHTML += `<br>Đang đọc: ${file.name} ...`;
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        #output { margin-top: 20px; }
+        button { padding: 8px 15px; font-size: 14px; }
+    </style>
+</head>
+<body>
 
-            let result = await Tesseract.recognize(file, "eng", {
-                logger: m => console.log(m)
-            });
+    <h2>Đọc chữ trong ảnh & đổi tên file theo dòng chứa “số GYC”</h2>
 
-            let text = result.data.text.trim();
-            let lines = text.split(/\r?\n/);
+    <input type="file" id="images" multiple accept="image/*"><br><br>
+    <button id="processBtn">Bắt đầu xử lý</button>
 
-            // tìm dòng bắt đầu bằng "số GYC"
-            let gycLine = lines.find(line => /^số gyc/i.test(line));
+    <h3>Kết quả:</h3>
+    <div id="output"></div>
 
-            let newName = "";
-            if (!gycLine) {
-                newName = "not_found";
-            } else {
-                let words = gycLine.trim().split(/\s+/);
-                let last6 = words.slice(-6).join("_");
-                newName = last6 || "untitled";
-            }
+    <button id="downloadZipBtn" style="display:none; margin-top:20px;">Tải tất cả ảnh (ZIP)</button>
 
-            newName = newName.replace(/[^a-zA-Z0-9_]/g, "");
+    <script>
+        // Đảm bảo DOM đã load
+        document.addEventListener("DOMContentLoaded", () => {
+            const imagesInput = document.getElementById("images");
+            const output = document.getElementById("output");
+            const processBtn = document.getElementById("processBtn");
+            const downloadZipBtn = document.getElementById("downloadZipBtn");
 
-            let finalName = newName + file.name.substring(file.name.lastIndexOf("."));
+            processBtn.onclick = async () => {
+                const files = imagesInput.files;
+                if (!files.length) return alert("Hãy chọn ảnh!");
 
-            output.innerHTML += `<br>➡ Tên mới: <b>${finalName}</b><br>`;
+                output.innerHTML = "Đang xử lý OCR...<br>";
+                const zip = new JSZip();
 
-            let arrayBuffer = await file.arrayBuffer();
-            zip.file(finalName, arrayBuffer);
-        }
+                for (const file of files) {
+                    output.innerHTML += `<br>Đang đọc: ${file.name} ...`;
 
-        output.innerHTML += "<br><br><b>Hoàn tất!</b>";
-        downloadZipBtn.style.display = "block";
+                    try {
+                        // OCR ảnh (ngôn ngữ eng, có thể đổi vie nếu cần)
+                        let result = await Tesseract.recognize(file, "eng", {
+                            logger: m => console.log(m)
+                        });
 
-        downloadZipBtn.onclick = async () => {
-            let content = await zip.generateAsync({ type: "blob" });
-            saveAs(content, "images_renamed.zip");
-        };
-    };
-</script>
+                        let text = result.data.text || "";
+                        let lines = text.split(/\r?\n/);
+
+                        // tìm dòng bắt đầu bằng "số GYC" (không phân biệt hoa-thường)
+                        let gycLine = lines.find(line => /^số gyc/i.test(line.trim()));
+
+                        let newName = "";
+
+                        if (!gycLine) {
+                            newName = "not_found";
+                        } else {
+                            let words = gycLine.trim().split(/\s+/);
+                            let last6 = words.slice(-6).join("_");
+                            newName = last6 || "untitled";
+                        }
+
+                        // loại bỏ ký tự đặc biệt
+                        newName = newName.replace(/[^a-zA-Z0-9_]/g, "");
+
+                        let ext = file.name.substring(file.name.lastIndexOf("."));
+                        let finalName = newName + ext;
+
+                        output.innerHTML += `<br>➡ Tên mới: <b>${finalName}</b><br>`;
+
+                        // Thêm file vào ZIP
+                        let arrayBuffer = await file.arrayBuffer();
+                        zip.file(finalName, arrayBuffer);
+
+                    } catch (err) {
+                        output.innerHTML += `<br>❌ Lỗi khi đọc ${file.name}: ${err}<br>`;
+                        console.error(err);
+                    }
+                }
+
+                output.innerHTML += "<br><b>Hoàn tất!</b>";
+                downloadZipBtn.style.display = "block";
+
+                downloadZipBtn.onclick = async () => {
+                    try {
+                        let content = await zip.generateAsync({ type: "blob" });
+                        saveAs(content, "images_renamed.zip");
+                    } catch (err) {
+                        alert("Lỗi khi tạo ZIP: " + err);
+                        console.error(err);
+                    }
+                };
+            };
+        });
+    </script>
+
+</body>
+</html>
