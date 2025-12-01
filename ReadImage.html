@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đổi tên ảnh theo chữ OCR</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2/dist/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+</head>
+<body style="font-family:Arial;padding:20px">
+
+    <h2>Đọc chữ trong ảnh & đổi tên file theo 3 chữ đầu</h2>
+
+    <input type="file" id="images" multiple accept="image/*"><br><br>
+    <button id="processBtn">Bắt đầu xử lý</button>
+
+    <h3>Kết quả:</h3>
+    <div id="output"></div>
+
+    <button id="downloadZipBtn" style="margin-top:20px; display:none">Tải tất cả ảnh (ZIP)</button>
+
+    <script>
+        const imagesInput = document.getElementById("images");
+        const output = document.getElementById("output");
+        const processBtn = document.getElementById("processBtn");
+        const downloadZipBtn = document.getElementById("downloadZipBtn");
+
+        processBtn.onclick = async () => {
+            const files = imagesInput.files;
+            if (!files.length) return alert("Hãy chọn ảnh!");
+
+            output.innerHTML = "Đang xử lý OCR...<br>";
+            const zip = new JSZip();
+
+            for (const file of files) {
+                output.innerHTML += `<br>Đang đọc: ${file.name} ...`;
+
+                let result = await Tesseract.recognize(file, "eng", {
+                    logger: m => console.log(m)
+                });
+
+                let text = result.data.text.trim();
+                let words = text.split(/\s+/); 
+
+                // lấy 3 chữ đầu
+                let newName = words.slice(0, 3).join("_") || "untitled";
+
+                // làm sạch ký tự lạ
+                newName = newName.replace(/[^a-zA-Z0-9_]/g, "");
+
+                let finalName = newName + file.name.substring(file.name.lastIndexOf("."));
+
+                output.innerHTML += `<br>➡ Tên mới: <b>${finalName}</b><br>`;
+
+                // thêm ảnh vào ZIP
+                let arrayBuffer = await file.arrayBuffer();
+                zip.file(finalName, arrayBuffer);
+            }
+
+            output.innerHTML += "<br><br><b>Hoàn tất!</b>";
+            downloadZipBtn.style.display = "block";
+
+            // nút tải ZIP
+            downloadZipBtn.onclick = async () => {
+                let content = await zip.generateAsync({ type: "blob" });
+                saveAs(content, "images_renamed.zip");
+            };
+        };
+    </script>
+
+</body>
+</html>
